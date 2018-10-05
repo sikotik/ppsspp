@@ -107,6 +107,9 @@ bool System_GetPropertyBool(SystemProperty prop) {
 void System_SendMessage(const char *command, const char *parameter) {
 	if (!strcmp(command, "finish")) {
 		qApp->exit(0);
+	} else if (!strcmp(command, "graphics_restart")) {
+		// Should find a way to properly restart the app.
+		qApp->exit(0);
 	}
 }
 
