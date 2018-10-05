@@ -1032,7 +1032,7 @@ UI::EventReturn MainScreen::OnLoadFile(UI::EventParams &e) {
 	if (QFile::exists(fileName)) {
 		QDir newPath;
 		g_Config.currentDirectory = newPath.filePath(fileName).toStdString();
-		g_Config.Save();
+		g_Config.Save("OnLoadFile (QT)");
 		screenManager()->switchScreen(new EmuScreen(fileName.toStdString()));
 	}
 #endif
@@ -1213,7 +1213,7 @@ UI::EventReturn MainScreen::OnExit(UI::EventParams &e) {
 	System_SendMessage("finish", "");
 
 	// However, let's make sure the config was saved, since it may not have been.
-	g_Config.Save();
+	g_Config.Save("MainScreen::OnExit");
 
 #ifdef __ANDROID__
 #ifdef ANDROID_NDK_PROFILER

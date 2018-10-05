@@ -1066,7 +1066,7 @@ void GameSettingsScreen::onFinish(DialogResult result) {
 
 	Reporting::Enable(enableReports_, "report.ppsspp.org");
 	Reporting::UpdateConfig();
-	g_Config.Save();
+	g_Config.Save("GameSettingsScreen::onFinish");
 	if (editThenRestore_) {
 		g_Config.unloadGameConfig();
 	}
@@ -1086,7 +1086,7 @@ void GameSettingsScreen::CallbackRenderingBackend(bool yes) {
 	if (yes) {
 		// Extra save here to make sure the choice really gets saved even if there are shutdown bugs in
 		// the GPU backend code.
-		g_Config.Save();
+		g_Config.Save("GameSettingsScreen::RenderingBackendYes");
 		System_SendMessage("graphics_restart", "");
 	} else {
 		g_Config.iGPUBackend = (int)GetGPUBackend();
@@ -1099,7 +1099,7 @@ void GameSettingsScreen::CallbackRenderingDevice(bool yes) {
 	if (yes) {
 		// Extra save here to make sure the choice really gets saved even if there are shutdown bugs in
 		// the GPU backend code.
-		g_Config.Save();
+		g_Config.Save("GameSettingsScreen::RenderingDeviceYes");
 		System_SendMessage("graphics_restart", "");
 	} else {
 		std::string *deviceNameSetting = GPUDeviceNameSetting();
@@ -1327,7 +1327,7 @@ void DeveloperToolsScreen::CreateViews() {
 }
 
 void DeveloperToolsScreen::onFinish(DialogResult result) {
-	g_Config.Save();
+	g_Config.Save("DeveloperToolsScreen::onFinish");
 }
 
 void GameSettingsScreen::CallbackRestoreDefaults(bool yes) {
