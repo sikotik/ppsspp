@@ -648,7 +648,6 @@ void VulkanContext::ReinitSurface(int width, int height) {
 		surface_ = VK_NULL_HANDLE;
 	}
 
-	ILOG("Creating Vulkan surface (%d, %d)", width, height);
 	switch (winsys_) {
 #ifdef _WIN32
 	case WINDOWSYSTEM_WIN32:
@@ -726,8 +725,22 @@ void VulkanContext::ReinitSurface(int width, int height) {
 		_assert_msg_(G3D, false, "Vulkan support for chosen window system not implemented");
 		break;
 	}
+
 	width_ = width;
 	height_ = height;
+
+	// In case we didn't get a width and height, try to recover it from the surface.
+	// Useful with SDL.
+	if (width_ < 0) {
+		VkSurfaceCapabilitiesKHR caps;
+		if (VK_SUCCESS == vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_devices_[physical_device_], surface_, &caps)) {
+			if (caps.currentExtent.width != 0xFFFFFFFF && caps.currentExtent.height != 0xFFFFFFFF) {
+				width_ = caps.currentExtent.width;
+				height_ = caps.currentExtent.height;
+			}
+		}
+	}
+	ILOG("Created Vulkan surface (%d x %d)", width_, height_);
 }
 
 bool VulkanContext::InitQueue() {
