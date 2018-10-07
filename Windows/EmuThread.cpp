@@ -159,7 +159,7 @@ void MainThreadFunc() {
 		if (performingRestart) {
 			// Okay, switching graphics didn't work out.  Probably a driver bug - fallback to restart.
 			// This happens on NVIDIA when switching OpenGL -> Vulkan.
-			g_Config.Save();
+			g_Config.Save("fallback");
 			W32Util::ExitAndRestart();
 		}
 
@@ -196,7 +196,7 @@ void MainThreadFunc() {
 			g_Config.iGPUBackend = (int)nextBackend;
 			// Clear this to ensure we try their selection.
 			g_Config.sFailedGPUBackends.clear();
-			g_Config.Save();
+			g_Config.Save("save failed gpu backends");
 
 			W32Util::ExitAndRestart();
 		} else {
