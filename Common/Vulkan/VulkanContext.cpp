@@ -505,15 +505,26 @@ void VulkanContext::ChooseDevice(int physical_device) {
 		ELOG("Could not find a usable depth stencil format.");
 	}
 
-	// This is as good a place as any to do this
+	// This is as good a place as any to do this.
 	vkGetPhysicalDeviceMemoryProperties(physical_devices_[physical_device_], &memory_properties);
+	ILOG("Memory Types (%d):", memory_properties.memoryTypeCount);
+	for (int i = 0; i < (int)memory_properties.memoryTypeCount; i++) {
+		// Don't bother printing dummy memory types.
+		if (!memory_properties.memoryTypes[i].propertyFlags)
+			continue;
+		ILOG("  %d: Heap %d; Flags: %s%s%s%s  ", i, memory_properties.memoryTypes[i].heapIndex,
+			(memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) ? "DEVICE_LOCAL " : "",
+			(memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) ? "HOST_VISIBLE " : "",
+			(memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) ? "HOST_CACHED " : "",
+			(memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) ? "HOST_COHERENT " : "");
+	}
 
 	// Optional features
 	vkGetPhysicalDeviceFeatures(physical_devices_[physical_device_], &featuresAvailable_);
 	memset(&featuresEnabled_, 0, sizeof(featuresEnabled_));
 
 	// Enable a few safe ones if they are available.
-	if (featuresAvailable_.dualSrcBlend && physicalDeviceProperties_[physical_device_].vendorID != VULKAN_VENDOR_QUALCOMM) {
+	if (featuresAvailable_.dualSrcBlend) {
 		featuresEnabled_.dualSrcBlend = true;
 	}
 	if (featuresAvailable_.largePoints) {
@@ -577,7 +588,11 @@ VkResult VulkanContext::CreateDevice() {
 	}
 	assert(found);
 
-	deviceExtensionsLookup_.DEDICATED_ALLOCATION = EnableDeviceExtension(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
+	if (EnableDeviceExtension(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME)) {
+		deviceExtensionsLookup_.KHR_get_memory_requirements2 = true;
+		deviceExtensionsLookup_.KHR_dedicated_allocation = EnableDeviceExtension(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
+	}
+	deviceExtensionsLookup_.EXT_external_memory_host = EnableDeviceExtension(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
 
 	VkDeviceCreateInfo device_info{ VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
 	device_info.queueCreateInfoCount = 1;
@@ -634,43 +649,30 @@ void VulkanContext::DestroyDebugMsgCallback() {
 	}
 }
 
-void VulkanContext::InitSurface(WindowSystem winsys, void *data1, void *data2, int width, int height) {
+VkResult VulkanContext::InitSurface(WindowSystem winsys, void *data1, void *data2) {
 	winsys_ = winsys;
 	winsysData1_ = data1;
 	winsysData2_ = data2;
-	ReinitSurface(width, height);
+	return ReinitSurface();
 }
 
-void VulkanContext::ReinitSurface(int width, int height) {
+VkResult VulkanContext::ReinitSurface() {
 	if (surface_ != VK_NULL_HANDLE) {
-		ILOG("Destroying Vulkan surface (%d, %d)", width_, height_);
+		ILOG("Destroying Vulkan surface (%d, %d)", swapChainExtent_.width, swapChainExtent_.height);
 		vkDestroySurfaceKHR(instance_, surface_, nullptr);
 		surface_ = VK_NULL_HANDLE;
 	}
 
-	ILOG("Creating Vulkan surface (%d, %d)", width, height);
+	ILOG("Creating Vulkan surface for window");
 	switch (winsys_) {
 #ifdef _WIN32
 	case WINDOWSYSTEM_WIN32:
 	{
-		HINSTANCE connection = (HINSTANCE)winsysData1_;
-		HWND window = (HWND)winsysData2_;
-
-		if (width < 0 || height < 0)
-		{
-			RECT rc;
-			GetClientRect(window, &rc);
-			width = rc.right - rc.left;
-			height = rc.bottom - rc.top;
-		}
-
 		VkWin32SurfaceCreateInfoKHR win32{ VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR };
 		win32.flags = 0;
-		win32.hwnd = window;
-		win32.hinstance = connection;
-		VkResult res = vkCreateWin32SurfaceKHR(instance_, &win32, nullptr, &surface_);
-		assert(res == VK_SUCCESS);
-		break;
+		win32.hwnd = (HWND)winsysData2_;
+		win32.hinstance = (HINSTANCE)winsysData1_;
+		return vkCreateWin32SurfaceKHR(instance_, &win32, nullptr, &surface_);
 	}
 #endif
 #if defined(__ANDROID__)
@@ -680,9 +682,7 @@ void VulkanContext::ReinitSurface(int width, int height) {
 		VkAndroidSurfaceCreateInfoKHR android{ VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR };
 		android.flags = 0;
 		android.window = wnd;
-		VkResult res = vkCreateAndroidSurfaceKHR(instance_, &android, nullptr, &surface_);
-		assert(res == VK_SUCCESS);
-		break;
+		return vkCreateAndroidSurfaceKHR(instance_, &android, nullptr, &surface_);
 	}
 #endif
 #if defined(VK_USE_PLATFORM_XLIB_KHR)
@@ -692,9 +692,7 @@ void VulkanContext::ReinitSurface(int width, int height) {
 		xlib.flags = 0;
 		xlib.dpy = (Display *)winsysData1_;
 		xlib.window = (Window)winsysData2_;
-		VkResult res = vkCreateXlibSurfaceKHR(instance_, &xlib, nullptr, &surface_);
-		assert(res == VK_SUCCESS);
-		break;
+		return vkCreateXlibSurfaceKHR(instance_, &xlib, nullptr, &surface_);
 	}
 #endif
 #if defined(VK_USE_PLATFORM_XCB_KHR)
@@ -704,9 +702,7 @@ void VulkanContext::ReinitSurface(int width, int height) {
 		xcb.flags = 0;
 		xcb.connection = (Connection *)winsysData1_;
 		xcb.window = (Window)(uintptr_t)winsysData2_;
-		VkResult res = vkCreateXcbSurfaceKHR(instance_, &xcb, nullptr, &surface_);
-		assert(res == VK_SUCCESS);
-		break;
+		return vkCreateXcbSurfaceKHR(instance_, &xcb, nullptr, &surface_);
 	}
 #endif
 #if defined(VK_USE_PLATFORM_WAYLAND_KHR)
@@ -716,18 +712,14 @@ void VulkanContext::ReinitSurface(int width, int height) {
 		wayland.flags = 0;
 		wayland.display = (wl_display *)winsysData1_;
 		wayland.surface = (wl_surface *)winsysData2_;
-		VkResult res = vkCreateWaylandSurfaceKHR(instance_, &wayland, nullptr, &surface_);
-		assert(res == VK_SUCCESS);
-		break;
+		return vkCreateWaylandSurfaceKHR(instance_, &wayland, nullptr, &surface_);
 	}
 #endif
 
 	default:
 		_assert_msg_(G3D, false, "Vulkan support for chosen window system not implemented");
-		break;
+		return VK_ERROR_INITIALIZATION_FAILED;
 	}
-	width_ = width;
-	height_ = height;
 }
 
 bool VulkanContext::InitQueue() {
@@ -818,6 +810,14 @@ bool VulkanContext::InitQueue() {
 	return true;
 }
 
+int clamp(int x, int a, int b) {
+	if (x < a)
+		return a;
+	if (x > b)
+		return b;
+	return x;
+}
+
 bool VulkanContext::InitSwapchain() {
 	VkResult res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_devices_[physical_device_], surface_, &surfCapabilities_);
 	assert(res == VK_SUCCESS);
@@ -829,18 +829,19 @@ bool VulkanContext::InitSwapchain() {
 	res = vkGetPhysicalDeviceSurfacePresentModesKHR(physical_devices_[physical_device_], surface_, &presentModeCount, presentModes);
 	assert(res == VK_SUCCESS);
 
-	VkExtent2D swapChainExtent;
-	// width and height are either both -1, or both not -1.
-	if (surfCapabilities_.currentExtent.width == (uint32_t)-1) {
-		// If the surface size is undefined, the size is set to
-		// the size of the images requested.
-		ILOG("initSwapchain: %dx%d", width_, height_);
-		swapChainExtent.width = width_;
-		swapChainExtent.height = height_;
-	} else {
-		// If the surface size is defined, the swap chain size must match
-		swapChainExtent = surfCapabilities_.currentExtent;
+	ILOG("surfCapabilities_.currentExtent: %dx%d", surfCapabilities_.currentExtent.width, surfCapabilities_.currentExtent.height);
+	ILOG("surfCapabilities_.minImageExtent: %dx%d", surfCapabilities_.minImageExtent.width, surfCapabilities_.minImageExtent.height);
+	ILOG("surfCapabilities_.maxImageExtent: %dx%d", surfCapabilities_.maxImageExtent.width, surfCapabilities_.maxImageExtent.height);
+
+	swapChainExtent_.width = clamp(surfCapabilities_.currentExtent.width, surfCapabilities_.minImageExtent.width, surfCapabilities_.maxImageExtent.width);
+	swapChainExtent_.height = clamp(surfCapabilities_.currentExtent.height, surfCapabilities_.minImageExtent.height, surfCapabilities_.maxImageExtent.height);
+
+	if (physicalDeviceProperties_[physical_device_].vendorID == VULKAN_VENDOR_IMGTEC) {
+		// Swap chain width hack to avoid issue #11743 (PowerVR driver bug).
+		swapChainExtent_.width &= ~31;
 	}
+
+	ILOG("swapChainExtent: %dx%d", swapChainExtent_.width, swapChainExtent_.height);
 
 	// TODO: Find a better way to specify the prioritized present mode while being able
 	// to fall back in a sensible way.
@@ -896,8 +897,8 @@ bool VulkanContext::InitSwapchain() {
 	swap_chain_info.minImageCount = desiredNumberOfSwapChainImages;
 	swap_chain_info.imageFormat = swapchainFormat_;
 	swap_chain_info.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-	swap_chain_info.imageExtent.width = swapChainExtent.width;
-	swap_chain_info.imageExtent.height = swapChainExtent.height;
+	swap_chain_info.imageExtent.width = swapChainExtent_.width;
+	swap_chain_info.imageExtent.height = swapChainExtent_.height;
 	swap_chain_info.preTransform = preTransform;
 	swap_chain_info.imageArrayLayers = 1;
 	swap_chain_info.presentMode = swapchainPresentMode;

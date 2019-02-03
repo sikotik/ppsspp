@@ -47,6 +47,7 @@ void CreateImage(VulkanContext *vulkan, VkCommandBuffer cmd, VKRImage &img, int 
 	VkMemoryAllocateInfo alloc{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
 	alloc.allocationSize = memreq.size;
 
+	/*
 	// Hint to the driver that this allocation is image-specific. Some drivers benefit.
 	// We only bother supporting the KHR extension, not the old NV one.
 	VkMemoryDedicatedAllocateInfoKHR dedicated{ VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR };
@@ -54,6 +55,7 @@ void CreateImage(VulkanContext *vulkan, VkCommandBuffer cmd, VKRImage &img, int 
 		alloc.pNext = &dedicated;
 		dedicated.image = img.image;
 	}
+	*/
 
 	vulkan->MemoryTypeFromProperties(memreq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &alloc.memoryTypeIndex);
 	VkResult res = vkAllocateMemory(vulkan->GetDevice(), &alloc, nullptr, &img.memory);
@@ -380,7 +382,9 @@ VkCommandBuffer VulkanRenderManager::GetInitCmd() {
 			VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
 		};
 		VkResult res = vkBeginCommandBuffer(frameData.initCmd, &begin);
-		_assert_(res == VK_SUCCESS);
+		if (res != VK_SUCCESS) {
+			return VK_NULL_HANDLE;
+		}
 		frameData.hasInitCommands = true;
 	}
 	return frameData_[curFrame].initCmd;
@@ -896,7 +900,11 @@ void VulkanRenderManager::Submit(int frame, bool triggerFence) {
 			submit_info.pCommandBuffers = cmdBufs;
 			res = vkQueueSubmit(vulkan_->GetGraphicsQueue(), 1, &submit_info, VK_NULL_HANDLE);
 			if (res == VK_ERROR_DEVICE_LOST) {
-				_assert_msg_(G3D, false, "Lost the Vulkan device!");
+#ifdef _WIN32
+				_assert_msg_(G3D, false, "Lost the Vulkan device! If this happens again, switch Graphics Backend from Vulkan to Direct3D11");
+#else
+				_assert_msg_(G3D, false, "Lost the Vulkan device! If this happens again, switch Graphics Backend from Vulkan to OpenGL");
+#endif
 			} else {
 				_assert_msg_(G3D, res == VK_SUCCESS, "vkQueueSubmit failed (init)! result=%s", VulkanResultToString(res));
 			}
@@ -920,7 +928,11 @@ void VulkanRenderManager::Submit(int frame, bool triggerFence) {
 	}
 	res = vkQueueSubmit(vulkan_->GetGraphicsQueue(), 1, &submit_info, triggerFence ? frameData.fence : VK_NULL_HANDLE);
 	if (res == VK_ERROR_DEVICE_LOST) {
-		_assert_msg_(G3D, false, "Lost the Vulkan device!");
+#ifdef _WIN32
+		_assert_msg_(G3D, false, "Lost the Vulkan device! If this happens again, switch Graphics Backend from Vulkan to Direct3D11");
+#else
+		_assert_msg_(G3D, false, "Lost the Vulkan device! If this happens again, switch Graphics Backend from Vulkan to OpenGL");
+#endif
 	} else {
 		_assert_msg_(G3D, res == VK_SUCCESS, "vkQueueSubmit failed (main, split=%d)! result=%s", (int)splitSubmit_, VulkanResultToString(res));
 	}

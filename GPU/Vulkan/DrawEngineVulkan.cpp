@@ -211,7 +211,8 @@ void DrawEngineVulkan::FrameData::Destroy(VulkanContext *vulkan) {
 
 void DrawEngineVulkan::DestroyDeviceObjects() {
 	delete tessDataTransferVulkan;
-	tessDataTransfer = tessDataTransferVulkan = nullptr;
+	tessDataTransfer = nullptr;
+	tessDataTransferVulkan = nullptr;
 
 	for (int i = 0; i < VulkanContext::MAX_INFLIGHT_FRAMES; i++) {
 		frame_[i].Destroy(vulkan_);
@@ -355,7 +356,7 @@ VkResult DrawEngineVulkan::RecreateDescriptorPool(FrameData &frame, int newSize)
 	dpTypes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 	dpTypes[1].descriptorCount = frame.descPoolSize * 3;  // Don't use these for tess anymore, need max three per set.
 	dpTypes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	dpTypes[2].descriptorCount = frame.descPoolSize;
+	dpTypes[2].descriptorCount = frame.descPoolSize * 3;  // TODO: Use a separate layout when no spline stuff is needed to reduce the need for these.
 	dpTypes[2].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 
 	VkDescriptorPoolCreateInfo dp{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };

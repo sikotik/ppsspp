@@ -553,7 +553,7 @@ void FramebufferManagerD3D11::BindFramebufferAsColorTexture(int stage, VirtualFr
 		} else {
 			draw_->BindFramebufferAsTexture(framebuffer->fbo, stage, Draw::FB_COLOR_BIT, 0);
 		}
-	} else if (framebuffer != currentRenderVfb_) {
+	} else if (framebuffer != currentRenderVfb_ || (flags & BINDFBCOLOR_FORCE_SELF) != 0) {
 		draw_->BindFramebufferAsTexture(framebuffer->fbo, stage, Draw::FB_COLOR_BIT, 0);
 	} else {
 		ERROR_LOG_REPORT_ONCE(d3d11SelfTexture, G3D, "Attempting to texture from target (src=%08x / target=%08x / flags=%d)", framebuffer->fb_address, currentRenderVfb_->fb_address, flags);
@@ -687,7 +687,7 @@ void FramebufferManagerD3D11::PackDepthbuffer(VirtualFramebuffer *vfb, int x, in
 		return;
 	}
 
-	const u32 z_address = (0x04000000) | vfb->z_address;
+	const u32 z_address = vfb->z_address;
 	// TODO
 }
 
